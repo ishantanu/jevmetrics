@@ -1,0 +1,57 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+
+  batch: {}
+
+connectors:
+  jevmetrics/annotate:
+    api_key: ${env:JEV_API_KEY}
+    mode: annotate
+
+    queue_size: 256
+    workers: 2
+
+    policy:
+      score_ttl: 15m
+      keep_threshold: 0.70
+      drop_threshold: 0.30
+
+exporters:
+  debug:
+    verbosity: detailed
+
+  prometheus:
+    endpoint: 0.0.0.0:9464
+
+service:
+  pipelines:
+
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+
+    metrics/input:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [jevmetrics/annotate]
+
+    metrics/output:
+      receivers: [jevmetrics/annotate]
+      processors: [batch]
+      exporters: [debug, prometheus]

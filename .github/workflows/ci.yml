@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Go checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: otelconnector/go.mod
+          cache-dependency-path: otelconnector/go.sum
+      - name: Check module files are tidy
+        run: |
+          go mod tidy -diff
+          (cd otelconnector && go mod tidy -diff)
+      - name: Check formatting, vet, and race tests for both modules
+        run: make check
+      - name: Build standalone application and launcher
+        run: go build -mod=readonly ./cmd/...
+      - name: Check build script syntax
+        run: bash -n scripts/build-collector.sh
+
+  collector:
+    name: Collector build and configs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: otelconnector/go.mod
+          cache-dependency-path: otelconnector/go.sum
+      - name: Install pinned Collector Builder
+        run: go install go.opentelemetry.io/collector/cmd/builder@v0.161.0
+      - name: Build distribution
+        run: OCB_BIN="$(go env GOPATH)/bin/builder" make collector
+      - name: Check launcher and compiled components
+        run: |
+          ./_build/otelcol-jevmetrics --version
+          ./_build/otelcol-jevmetrics components
+      - name: Validate all example configurations without live inference
+        run: make collector-validate

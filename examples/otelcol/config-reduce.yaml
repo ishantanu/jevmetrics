@@ -1,0 +1,44 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+  batch: {}
+
+connectors:
+  jevmetrics/reduce:
+    api_key: ${env:JEV_API_KEY}
+    mode: reduce
+    queue_size: 256
+    workers: 2
+    policy:
+      score_ttl: 15m
+      keep_threshold: 0.70
+      drop_threshold: 0.30
+      protected_prefixes: [otelcol_, up, scrape_, target_]
+
+exporters:
+  otlp/primary:
+    endpoint: primary:4317
+    tls: { insecure: true }
+
+service:
+  pipelines:
+    # In reduce mode there is intentionally no raw/archive exporter. The
+    # reduced stream is the only stream that reaches the primary backend.
+    metrics/input:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [jevmetrics/reduce]
+
+    metrics/reduced:
+      receivers: [jevmetrics/reduce]
+      processors: [batch]
+      exporters: [otlp/primary]

@@ -1,0 +1,36 @@
+# Generated builds and Go test output
+/_build/
+/jevmetrics
+/jevmetrics.exe
+/otelcol-jevmetrics-wrapper
+/otelcol-jevmetrics-wrapper.exe
+/bin/
+/dist/
+*.test
+*.test.exe
+coverage.out
+coverage-*.out
+coverage.html
+*.prof
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+*.local.json
+*.local.yaml
+*.local.yml
+
+# Local Go workspaces (the repository contains independent modules)
+go.work
+go.work.sum
+
+# Editor and OS files
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.log

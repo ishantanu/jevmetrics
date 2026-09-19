@@ -1,0 +1,48 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+  batch: {}
+
+connectors:
+  jevmetrics/high-value:
+    api_key: ${env:JEV_API_KEY}
+    mode: route
+    queue_size: 256
+    workers: 2
+    policy:
+      score_ttl: 15m
+      keep_threshold: 0.70
+      drop_threshold: 0.30
+      protected_prefixes: [otelcol_, up, scrape_, target_]
+
+exporters:
+  # Replace these with real destinations. The point of route mode is that the
+  # complete raw stream can still go to cheap/archive storage while the
+  # high-value stream goes to the primary metrics backend.
+  otlp/archive:
+    endpoint: archive:4317
+    tls: { insecure: true }
+  otlp/primary:
+    endpoint: primary:4317
+    tls: { insecure: true }
+
+service:
+  pipelines:
+    metrics/raw:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/archive, jevmetrics/high-value]
+
+    metrics/high-value:
+      receivers: [jevmetrics/high-value]
+      processors: [batch]
+      exporters: [otlp/primary]

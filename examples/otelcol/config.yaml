@@ -1,0 +1,72 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+connectors:
+  # Default mode: annotate. All metrics pass through. Jev emits compact
+  # companion score metrics; it does NOT add dynamic score labels to every
+  # datapoint, which would create more cardinality.
+  jevmetrics/annotate:
+    api_key: ${env:JEV_API_KEY}
+    mode: annotate
+    base_url: https://api.typesafe.ai
+    model: jev-latest
+    timeout: 3s
+    queue_size: 256
+    workers: 2
+    policy:
+      score_ttl: 15m
+      keep_threshold: 0.70
+      drop_threshold: 0.30
+      protected_prefixes: [otelcol_, up, scrape_, target_]
+    context_attributes:
+      - service.name
+      - service.namespace
+      - deployment.environment.name
+      - cloud.region
+      - k8s.namespace.name
+
+exporters:
+  debug:
+    verbosity: detailed
+  otlp/backend:
+    endpoint: backend:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    # Logs and traces are unaffected by jevmetrics.
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+
+    # Metrics go through the jevmetrics connector.
+    metrics/input:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [jevmetrics/annotate]
+
+    metrics/output:
+      receivers: [jevmetrics/annotate]
+      processors: [batch]
+      exporters: [debug]

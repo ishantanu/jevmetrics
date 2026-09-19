@@ -1,0 +1,27 @@
+{
+  "server": {
+    "listen": ":8080"
+  },
+  "prometheus": {
+    "url": "http://localhost:9009/prometheus",
+    "tenant_header": "X-Scope-OrgID",
+    "tenant": "demo"
+  },
+  "evaluator": {
+    "type": "jev",
+    "model": "jev-latest",
+    "base_url": "https://api.typesafe.ai",
+    "timeout": "3s",
+    "fallback_baseline": true
+  },
+  "poll_interval": "30s",
+  "signals": [
+    {
+      "name": "checkout",
+      "error_query": "sum(rate(http_requests_total{service=\"checkout\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"checkout\"}[5m]))",
+      "latency_query": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{service=\"checkout\"}[5m])))",
+      "traffic_query": "sum(rate(http_requests_total{service=\"checkout\"}[5m]))",
+      "saturation_query": "max(rate(container_cpu_usage_seconds_total{service=\"checkout\"}[5m]))"
+    }
+  ]
+}
