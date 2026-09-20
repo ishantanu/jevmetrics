@@ -17,18 +17,30 @@ jobs:
     name: Go checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      JEVMETRICS_TEST_REDIS_ADDR: localhost:6379
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: otelconnector/go.mod
-          cache-dependency-path: otelconnector/go.sum
+          go-version-file: otelprocessor/go.mod
+          cache-dependency-path: otelprocessor/go.sum
       - name: Check module files are tidy
         run: |
           go mod tidy -diff
-          (cd otelconnector && go mod tidy -diff)
+          (cd otelprocessor && go mod tidy -diff)
       - name: Check formatting, vet, and race tests for both modules
         run: make check
       - name: Build standalone application and launcher
@@ -46,8 +58,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: otelconnector/go.mod
-          cache-dependency-path: otelconnector/go.sum
+          go-version-file: otelprocessor/go.mod
+          cache-dependency-path: otelprocessor/go.sum
       - name: Install pinned Collector Builder
         run: go install go.opentelemetry.io/collector/cmd/builder@v0.161.0
       - name: Build distribution

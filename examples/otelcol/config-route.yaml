@@ -12,10 +12,9 @@ processors:
     limit_mib: 512
   batch: {}
 
-connectors:
   jevmetrics/high-value:
     api_key: ${env:JEV_API_KEY}
-    mode: route
+    mode: reduce
     queue_size: 256
     workers: 2
     policy:
@@ -25,7 +24,7 @@ connectors:
       protected_prefixes: [otelcol_, up, scrape_, target_]
 
 exporters:
-  # Replace these with real destinations. The point of route mode is that the
+  # Replace these with real destinations. This pipeline fan-out means the
   # complete raw stream can still go to cheap/archive storage while the
   # high-value stream goes to the primary metrics backend.
   otlp/archive:
@@ -37,12 +36,13 @@ exporters:
 
 service:
   pipelines:
+    # Shared receiver fans out before filtering. The archive retains raw metrics.
     metrics/raw:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/archive, jevmetrics/high-value]
+      exporters: [otlp/archive]
 
     metrics/high-value:
-      receivers: [jevmetrics/high-value]
-      processors: [batch]
+      receivers: [otlp]
+      processors: [memory_limiter, jevmetrics/high-value, batch]
       exporters: [otlp/primary]

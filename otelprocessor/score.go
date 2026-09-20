@@ -1,4 +1,4 @@
-package jevmetricsconnector
+package jevmetricsprocessor
 
 import (
 	"crypto/sha256"
@@ -36,12 +36,8 @@ type metricScore struct {
 }
 
 type scoreJob struct {
-	Key         string
-	Summary     metricSummary
-	Resource    pcommon.Resource
-	Scope       pcommon.InstrumentationScope
-	ResourceURL string
-	ScopeURL    string
+	Key     string
+	Summary metricSummary
 }
 
 func summarizeMetric(m pmetric.Metric, scope pcommon.InstrumentationScope, resource pcommon.Map, allowed []string) metricSummary {

@@ -1,0 +1,44 @@
+# Apply the same coordination settings and retention policy to every replica.
+# This example uses one Redis primary endpoint (not Redis Cluster/Sentinel).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+  batch:
+    timeout: 5s
+
+  jevmetrics/cluster:
+    api_key: ${env:JEV_API_KEY}
+    mode: annotate
+    coordination:
+      # For production, use rediss:// and Redis ACL credentials from a secret.
+      redis_url: ${env:JEV_REDIS_URL:-redis://localhost:6379/0}
+      namespace: jevmetrics-production
+      revision: "1"
+      timeout: 1s
+      lease_ttl: 10s
+      max_in_flight: 4
+      requests_per_second: 10
+    policy:
+      score_ttl: 15m
+      protected_metrics:
+        - http.server.request.duration
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, jevmetrics/cluster, batch]
+      exporters: [debug]

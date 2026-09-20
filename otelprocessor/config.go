@@ -1,4 +1,4 @@
-package jevmetricsconnector
+package jevmetricsprocessor
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/collector/config/configopaque"
 )
 
@@ -18,6 +19,7 @@ type Policy struct {
 }
 
 type Config struct {
+	Coordination      CoordinationConfig  `mapstructure:"coordination"`
 	APIKey            configopaque.String `mapstructure:"api_key"`
 	BaseURL           string              `mapstructure:"base_url"`
 	Model             string              `mapstructure:"model"`
@@ -28,6 +30,18 @@ type Config struct {
 	Workers           int                 `mapstructure:"workers"`
 	Policy            Policy              `mapstructure:"policy"`
 	ContextAttributes []string            `mapstructure:"context_attributes"`
+}
+
+// CoordinationConfig enables shared assessments through one Redis primary.
+// A namespace is an inference budget and tenant boundary.
+type CoordinationConfig struct {
+	RedisURL          configopaque.String `mapstructure:"redis_url"`
+	Namespace         string              `mapstructure:"namespace"`
+	Revision          string              `mapstructure:"revision"`
+	Timeout           string              `mapstructure:"timeout"`
+	LeaseTTL          string              `mapstructure:"lease_ttl"`
+	MaxInFlight       int                 `mapstructure:"max_in_flight"`
+	RequestsPerSecond int                 `mapstructure:"requests_per_second"`
 }
 
 func (c *Config) Validate() error {
@@ -44,9 +58,9 @@ func (c *Config) Validate() error {
 		}
 	}
 	switch strings.ToLower(c.Mode) {
-	case "annotate", "route", "reduce":
+	case "annotate", "reduce":
 	default:
-		return fmt.Errorf("mode must be annotate, route, or reduce")
+		return fmt.Errorf("mode must be annotate or reduce")
 	}
 	if c.QueueSize <= 0 || c.Workers <= 0 || c.CacheSize <= 0 {
 		return fmt.Errorf("queue_size, workers and cache_size must be > 0")
@@ -56,6 +70,26 @@ func (c *Config) Validate() error {
 	}
 	if c.Policy.DropThreshold > c.Policy.KeepThreshold {
 		return fmt.Errorf("policy.drop_threshold must be <= policy.keep_threshold")
+	}
+	if c.Coordination.RedisURL != "" {
+		if _, err := redis.ParseURL(string(c.Coordination.RedisURL)); err != nil {
+			return fmt.Errorf("coordination.redis_url must be a valid redis:// or rediss:// URL")
+		}
+		if strings.TrimSpace(c.Coordination.Namespace) == "" || strings.TrimSpace(c.Coordination.Revision) == "" {
+			return fmt.Errorf("coordination.namespace and revision are required")
+		}
+		timeout, err := time.ParseDuration(c.Coordination.Timeout)
+		if err != nil || timeout < time.Millisecond {
+			return fmt.Errorf("coordination.timeout must be at least 1ms")
+		}
+		lease, err := time.ParseDuration(c.Coordination.LeaseTTL)
+		inferenceTimeout, _ := time.ParseDuration(c.Timeout)
+		if err != nil || lease <= inferenceTimeout+2*timeout {
+			return fmt.Errorf("coordination.lease_ttl must exceed timeout + twice coordination.timeout")
+		}
+		if c.scoreTTL() < time.Millisecond || c.Coordination.MaxInFlight <= 0 || c.Coordination.RequestsPerSecond <= 0 {
+			return fmt.Errorf("coordination requires positive limits and policy.score_ttl >= 1ms")
+		}
 	}
 	return nil
 }

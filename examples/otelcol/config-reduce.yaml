@@ -12,7 +12,6 @@ processors:
     limit_mib: 512
   batch: {}
 
-connectors:
   jevmetrics/reduce:
     api_key: ${env:JEV_API_KEY}
     mode: reduce
@@ -31,14 +30,7 @@ exporters:
 
 service:
   pipelines:
-    # In reduce mode there is intentionally no raw/archive exporter. The
-    # reduced stream is the only stream that reaches the primary backend.
-    metrics/input:
+    metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [jevmetrics/reduce]
-
-    metrics/reduced:
-      receivers: [jevmetrics/reduce]
-      processors: [batch]
+      processors: [memory_limiter, jevmetrics/reduce, batch]
       exporters: [otlp/primary]

@@ -1,11 +1,11 @@
-package jevmetricsconnector
+package jevmetricsprocessor
 
 import (
 	"container/list"
 	"time"
 )
 
-// scoreCache is guarded by connectorImp.mu. Eviction always makes a metric
+// scoreCache is guarded by metricsProcessor.mu. Eviction always makes a metric
 // unscored, so it is retained until a fresh assessment becomes available.
 type scoreCache struct {
 	limit   int

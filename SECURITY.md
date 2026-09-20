@@ -14,6 +14,6 @@ behavior, and the potential impact. Reports about unintended telemetry loss,
 credential disclosure, or inference requests containing unexpected data are
 relevant security concerns.
 
-Before operating the connector, review the README's data handling and retention
+Before operating the processor, review the README's data handling and retention
 policy sections. API keys belong in environment variables or your deployment's
 secret management, not committed configuration files.

@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem with the connector or standalone application
+about: Report a reproducible problem with the processor or standalone application
 ---
 
 ## What happened?

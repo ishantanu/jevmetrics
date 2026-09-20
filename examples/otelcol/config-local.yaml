@@ -13,7 +13,6 @@ processors:
 
   batch: {}
 
-connectors:
   jevmetrics/annotate:
     api_key: ${env:JEV_API_KEY}
     mode: annotate
@@ -46,12 +45,7 @@ service:
       processors: [memory_limiter, batch]
       exporters: [debug]
 
-    metrics/input:
+    metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [jevmetrics/annotate]
-
-    metrics/output:
-      receivers: [jevmetrics/annotate]
-      processors: [batch]
+      processors: [memory_limiter, jevmetrics/annotate, batch]
       exporters: [debug, prometheus]

@@ -60,9 +60,9 @@ echo
 
 cd "${ROOT_DIR}"
 
-echo "Preparing connector Go module..."
+echo "Preparing processor Go module..."
 (
-  cd otelconnector
+  cd otelprocessor
   go test -mod=readonly ./...
 )
 

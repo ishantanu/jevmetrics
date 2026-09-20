@@ -9,6 +9,7 @@ receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.161.0
 
 processors:
+  - gomod: github.com/ishantanu/jevmetrics/otelprocessor v0.0.0
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.161.0
   - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.161.0
 
@@ -17,13 +18,10 @@ exporters:
   - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.161.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.161.0
 
-connectors:
-  - gomod: github.com/ishantanu/jevmetrics/otelconnector v0.0.0
-
 providers:
   - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.67.0
   - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.67.0
   - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.67.0
 
 replaces:
-  - github.com/ishantanu/jevmetrics/otelconnector => ../otelconnector
+  - github.com/ishantanu/jevmetrics/otelprocessor => ../otelprocessor

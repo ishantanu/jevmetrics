@@ -15,7 +15,6 @@ processors:
     timeout: 5s
     send_batch_size: 1024
 
-connectors:
   # Default mode: annotate. All metrics pass through. Jev emits compact
   # companion score metrics; it does NOT add dynamic score labels to every
   # datapoint, which would create more cardinality.
@@ -60,13 +59,8 @@ service:
       processors: [memory_limiter, batch]
       exporters: [debug]
 
-    # Metrics go through the jevmetrics connector.
-    metrics/input:
+    # Metrics go through the jevmetrics processor.
+    metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [jevmetrics/annotate]
-
-    metrics/output:
-      receivers: [jevmetrics/annotate]
-      processors: [batch]
+      processors: [memory_limiter, jevmetrics/annotate, batch]
       exporters: [debug]

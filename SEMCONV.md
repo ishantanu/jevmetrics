@@ -55,4 +55,4 @@ Datapoint attribute **keys** are included to help Jev reason about likely cardin
 
 ## Preservation
 
-For metrics that are retained, the original pdata metric is copied through unchanged. The connector does not rename OTel semantic-convention metrics or rewrite their attributes.
+For metrics that are retained, the original pdata metric is copied through unchanged. The processor does not rename OTel semantic-convention metrics or rewrite their attributes.

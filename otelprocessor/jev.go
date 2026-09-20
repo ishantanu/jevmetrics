@@ -1,4 +1,4 @@
-package jevmetricsconnector
+package jevmetricsprocessor
 
 import (
 	"bytes"
@@ -42,13 +42,18 @@ func newJevClient(cfg *Config) (*jevClient, error) {
 	return &jevClient{apiKey: string(cfg.APIKey), url: strings.TrimRight(cfg.BaseURL, "/") + "/v1/systemone", model: cfg.Model, http: &http.Client{Timeout: t}}, nil
 }
 
-func (j *jevClient) scoreMetric(ctx context.Context, s metricSummary) (metricScore, error) {
-	body := request{Model: j.model, State: map[string]any{"kind": "otel_metric_storage_value_assessment", "metric": s}, Questions: map[string]question{
+// This exact question set is also hashed into the shared assessment namespace.
+func metricQuestions() map[string]question {
+	return map[string]question{
 		"relevance":  {Type: "noul", Instructions: "Does this metric carry durable operational value for observing, debugging, capacity planning, or understanding this workload?", Criteria: map[string]string{"true": "High operational value.", "false": "Little durable operational value."}},
 		"redundancy": {Type: "noul", Instructions: "Is this metric likely redundant with other standard telemetry or excessively noisy relative to its operational value?", Criteria: map[string]string{"true": "Likely redundant or noisy.", "false": "Distinct useful signal."}},
 		"keep":       {Type: "noul", Instructions: "Should this metric be retained in the primary metrics backend when the goal is to reduce metrics volume without losing important operational signal?", Criteria: map[string]string{"true": "Retain in primary metrics storage.", "false": "Safe candidate for reduction or cheaper storage."}},
 		"action":     {Type: "choice", Instructions: "Choose the safest storage action for this metric.", Criteria: map[string]string{"keep": "Keep at normal resolution.", "reduce": "Keep but reduce/downsample dimensions or resolution.", "drop": "Candidate to drop from primary metrics storage."}},
-	}}
+	}
+}
+
+func (j *jevClient) scoreMetric(ctx context.Context, s metricSummary) (metricScore, error) {
+	body := request{Model: j.model, State: map[string]any{"kind": "otel_metric_storage_value_assessment", "metric": s}, Questions: metricQuestions()}
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return metricScore{}, err

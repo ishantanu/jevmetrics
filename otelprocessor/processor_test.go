@@ -1,4 +1,4 @@
-package jevmetricsconnector
+package jevmetricsprocessor
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 )
 
@@ -46,13 +46,13 @@ func inputKey(md pmetric.Metrics) string {
 	sm := rm.ScopeMetrics().At(0)
 	return scoreKey(rm.Resource().Attributes(), sm.Scope(), sm.Metrics().At(0), rm.SchemaUrl(), sm.SchemaUrl())
 }
-func testConnector(t *testing.T, cfg *Config, fn consumer.ConsumeMetricsFunc) *connectorImp {
+func testProcessor(t *testing.T, cfg *Config, fn consumer.ConsumeMetricsFunc) *metricsProcessor {
 	t.Helper()
 	next, err := consumer.NewMetrics(fn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := newConnector(connector.Settings{TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()}}, cfg, next)
+	c, err := newProcessor(processor.Settings{TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()}}, cfg, next)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestPolicyAndPreservation(t *testing.T) {
 		want              int
 	}{
 		{"ANNOTATE", 0, true, false, 5},
-		{"route", 0.3, true, false, 0},
+		{"reduce", 0.3, true, false, 0},
 		{"reduce", 0.7, true, false, 1},
 		{"reduce", 0.5, true, false, 1},
 		{"reduce", 0, false, false, 1},
@@ -121,7 +121,7 @@ func TestPolicyAndPreservation(t *testing.T) {
 				cfg.Policy.ProtectedMetrics = []string{"custom.requests"}
 			}
 			var output pmetric.Metrics
-			c := testConnector(t, cfg, func(_ context.Context, md pmetric.Metrics) error { output = md; return nil })
+			c := testProcessor(t, cfg, func(_ context.Context, md pmetric.Metrics) error { output = md; return nil })
 			input := metricInput()
 			if tc.cached {
 				c.scores.put(inputKey(input), metricScore{Keep: tc.score, ScoredAt: time.Now()})
@@ -203,7 +203,7 @@ func TestCacheBoundAndExpiry(t *testing.T) {
 func TestUnknownExpiredAndQueueFullFailOpen(t *testing.T) {
 	cfg := testConfig()
 	cfg.QueueSize = 1
-	c := testConnector(t, cfg, func(_ context.Context, md pmetric.Metrics) error {
+	c := testProcessor(t, cfg, func(_ context.Context, md pmetric.Metrics) error {
 		if md.MetricCount() != 1 {
 			t.Error("metric lost")
 		}
@@ -229,7 +229,7 @@ func TestFailureBackoffAndRecovery(t *testing.T) {
 	cfg := testConfig()
 	cfg.Workers = 1
 	cfg.Mode = "reduce"
-	c := testConnector(t, cfg, func(_ context.Context, md pmetric.Metrics) error {
+	c := testProcessor(t, cfg, func(_ context.Context, md pmetric.Metrics) error {
 		if md.MetricCount() != 1 {
 			t.Error("unscored metric lost")
 		}
@@ -348,7 +348,7 @@ func TestAllMetricShapesPreserved(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			c := testConnector(t, testConfig(), func(_ context.Context, output pmetric.Metrics) error {
+			c := testProcessor(t, testConfig(), func(_ context.Context, output pmetric.Metrics) error {
 				after, err := marshaler.MarshalMetrics(output)
 				if err != nil {
 					t.Fatal(err)
