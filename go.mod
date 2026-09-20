@@ -1,3 +1,3 @@
 module github.com/ishantanu/jevmetrics
 
-go 1.23
+go 1.23.0
