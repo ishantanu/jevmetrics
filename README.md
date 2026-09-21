@@ -1,5 +1,10 @@
 # jevmetrics
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jevmetrics-flat-dark.png" />
+  <img src="docs/assets/jevmetrics.png" alt="jevmetrics logo" width="420" />
+</picture>
+
 **Jev inference for metric assessment and retention in OpenTelemetry.**
 
 `jevmetrics` is an experimental OpenTelemetry Collector metrics processor. It calls [TypeSafe’s Jev model](https://docs.typesafe.ai/api) to infer the likely operational value of metric instruments from their metadata, then applies deterministic policy to the returned probabilities.
