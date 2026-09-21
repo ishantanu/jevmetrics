@@ -68,7 +68,7 @@ func newProcessorTelemetry(provider metric.MeterProvider) processorTelemetry {
 		scored:        newCounter("jevmetrics.score.success", "Successful Jev metric assessments."),
 		scoreFailures: newCounter("jevmetrics.score.failure", "Failed Jev metric assessments."),
 		processed:     newCounter("jevmetrics.metrics.processed", "Input metrics inspected by the processor."),
-		kept:          newCounter("jevmetrics.metrics.kept", "Input metrics retained by reduce policy."),
+		kept:          newCounter("jevmetrics.metrics.kept", "Input metrics retained by the processor, including annotation and fail-open decisions."),
 		dropped:       newCounter("jevmetrics.metrics.dropped", "Input metrics removed by reduce policy."),
 		annotated:     newCounter("jevmetrics.metrics.annotated", "Input metrics with cached assessments emitted in annotate mode."),
 		scoreLatency:  latency,
@@ -174,6 +174,7 @@ func (c *metricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 				}
 				key := scoreKey(rm.Resource().Attributes(), sm.Scope(), m, rm.SchemaUrl(), sm.SchemaUrl())
 				if key == "" {
+					c.telemetry.kept.Add(ctx, 1)
 					return false
 				}
 				score, ok := c.cachedScore(key, now)
@@ -188,6 +189,7 @@ func (c *metricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 							c.cfg.ContextAttributes,
 						),
 					)
+					c.telemetry.kept.Add(ctx, 1)
 					return false
 				}
 				c.telemetry.cacheHits.Add(ctx, 1)
@@ -197,6 +199,7 @@ func (c *metricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 				}{m.Name(), score})
 				if c.cfg.Mode == "annotate" {
 					c.telemetry.annotated.Add(ctx, 1)
+					c.telemetry.kept.Add(ctx, 1)
 					return false
 				}
 				keep := shouldKeep(score, c.cfg.Policy)
@@ -230,7 +233,11 @@ func (c *metricsProcessor) enqueue(
 ) {
 	c.mu.Lock()
 
-	if c.queued[key] || c.now().Before(c.retryUntil) {
+	if c.queued[key] {
+		c.mu.Unlock()
+		return
+	}
+	if c.now().Before(c.retryUntil) {
 		c.telemetry.queueRejected.Add(context.Background(), 1)
 		c.mu.Unlock()
 		return
@@ -238,13 +245,13 @@ func (c *metricsProcessor) enqueue(
 
 	c.queued[key] = true
 	c.mu.Unlock()
-	c.telemetry.queued.Add(context.Background(), 1)
 
 	select {
 	case c.jobs <- scoreJob{
 		Key:     key,
 		Summary: summary,
 	}:
+		c.telemetry.queued.Add(context.Background(), 1)
 		c.logger.Info(
 			"metric queued for Jev scoring",
 			zap.String("metric", summary.Name),
