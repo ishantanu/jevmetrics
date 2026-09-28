@@ -26,6 +26,9 @@ processors:
     timeout: 3s
     queue_size: 256
     workers: 2
+    rate_limit:
+      requests_per_second: 10
+      burst: 1
     policy:
       score_ttl: 15m
       keep_threshold: 0.70

@@ -20,6 +20,7 @@ func NewFactory() processor.Factory {
 
 func createDefaultConfig() component.Config {
 	return &Config{
+		RateLimit: RateLimitConfig{RequestsPerSecond: 10, Burst: 1},
 		Coordination: CoordinationConfig{
 			Namespace: "jevmetrics", Revision: "1", Timeout: "1s", LeaseTTL: "10s",
 			MaxInFlight: 4, RequestsPerSecond: 10,

@@ -19,6 +19,7 @@ type Policy struct {
 }
 
 type Config struct {
+	RateLimit         RateLimitConfig     `mapstructure:"rate_limit"`
 	Coordination      CoordinationConfig  `mapstructure:"coordination"`
 	APIKey            configopaque.String `mapstructure:"api_key"`
 	BaseURL           string              `mapstructure:"base_url"`
@@ -30,6 +31,13 @@ type Config struct {
 	Workers           int                 `mapstructure:"workers"`
 	Policy            Policy              `mapstructure:"policy"`
 	ContextAttributes []string            `mapstructure:"context_attributes"`
+}
+
+// RateLimitConfig limits local inference admissions across all workers.
+// Redis coordination uses its namespace-wide admission limit instead.
+type RateLimitConfig struct {
+	RequestsPerSecond float64 `mapstructure:"requests_per_second"`
+	Burst             int     `mapstructure:"burst"`
 }
 
 // CoordinationConfig enables shared assessments through one Redis primary.
@@ -45,6 +53,9 @@ type CoordinationConfig struct {
 }
 
 func (c *Config) Validate() error {
+	if math.IsNaN(c.RateLimit.RequestsPerSecond) || math.IsInf(c.RateLimit.RequestsPerSecond, 0) || c.RateLimit.RequestsPerSecond <= 0 || c.RateLimit.Burst <= 0 {
+		return fmt.Errorf("rate_limit.requests_per_second must be finite and > 0, and rate_limit.burst must be > 0")
+	}
 	if c.APIKey == "" {
 		return fmt.Errorf("api_key is required (use ${env:JEV_API_KEY})")
 	}

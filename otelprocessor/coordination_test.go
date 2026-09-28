@@ -192,6 +192,10 @@ func runSharedReplicas(t *testing.T, address string) {
 	makeReplica := func() (*metricsProcessor, chan pmetric.Metrics) {
 		output := make(chan pmetric.Metrics, 16)
 		c := testProcessor(t, cfg, func(_ context.Context, md pmetric.Metrics) error { output <- md; return nil })
+		// An exhausted local bucket must not delay Redis lookups or ownership:
+		// coordinated mode uses the namespace-wide limiter instead.
+		c.limiter.SetLimit(0)
+		c.limiter.Allow()
 		c.client.http.Transport = transport
 		if err := c.Start(context.Background(), nil); err != nil {
 			t.Fatal(err)

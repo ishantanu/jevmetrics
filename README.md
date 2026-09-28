@@ -168,6 +168,9 @@ processors:
     timeout: 3s
     queue_size: 256
     workers: 2
+    rate_limit:
+      requests_per_second: 10
+      burst: 1
     cache_size: 10000
     policy:
       score_ttl: 15m
@@ -192,6 +195,8 @@ All shown values are defaults except `api_key`, which is required, and `protecte
 | `base_url`, `model` | Jev endpoint base URL and model identifier |
 | `timeout` | Positive HTTP request timeout |
 | `queue_size`, `workers` | Positive queue capacity and worker count |
+| `rate_limit.requests_per_second` | Positive finite local request rate; default `10`; fractional rates supported |
+| `rate_limit.burst` | Positive local token bucket capacity; default `1` |
 | `cache_size` | Positive maximum number of cached assessments |
 | `policy.score_ttl` | Positive lifetime of an assessment |
 | `policy.protected_metrics` | Exact names that bypass inference and filtering |
@@ -207,6 +212,10 @@ otherwise                -> keep
 ```
 
 Thresholds must be in `[0, 1]`, with `drop_threshold <= keep_threshold`. If both thresholds are equal, a score at that boundary is kept. `annotate` preserves input regardless of scores.
+
+The Collector processor shares one token bucket across its background workers. The bucket starts full; `burst` bounds immediate admissions and `requests_per_second` controls replenishment. Waiting for admission does not block metrics delivery; unknown metrics remain retained and the bounded queue may reject new assessment jobs. Shutdown cancels pending waits. Cache hits do not consume tokens.
+
+This limit is per processor instance, not per API key: multiple replicas or processor entries multiply the local budget. With Redis coordination enabled, `coordination.requests_per_second` supplies the namespace-wide admission limit instead; local `rate_limit` settings are not applied. These settings apply to the Collector processor, not the standalone evaluator.
 
 ## Fail-open behavior and caching
 
@@ -230,7 +239,7 @@ identity together; ordinary round-robin routing does not provide that guarantee.
 Routing is supplied by your ingestion topology, not by this processor.
 
 When a source moves to another replica, its metrics are kept while the new owner
-assesses them. Local mode has per-instance worker limits, not a shared API budget.
+assesses them. Local mode has per-instance worker and request-rate limits, not a shared API budget.
 See [cluster operation](docs/CLUSTERING.md) for ownership and rollout guidance.
 
 Optional Redis coordination shares expiring assessments across replicas, uses

@@ -5,7 +5,7 @@ assessment cache and background inference workers. There are two deployment choi
 
 | Deployment | Assessment state | Inference budget |
 | --- | --- | --- |
-| Independent replicas, preferably with source affinity | Local to each replica | Per-instance workers and cooldown |
+| Independent replicas, preferably with source affinity | Local to each replica | Per-instance token bucket, workers, and cooldown |
 | Optional Redis coordination | Shared expiring assessments plus local caches | Shared admissions and cooldown per namespace |
 
 ## Without Redis: source ownership
@@ -36,7 +36,10 @@ Source affinity reduces this duplication; it does not make inference determinist
 On restart or reassignment, a new owner's cold cache retains metrics until scoring
 completes. Membership changes may temporarily leave two owners with different
 cached decisions. No state handoff, exactly-once inference, or cluster-wide rate
-limit is provided in local mode. Size the aggregate worker count for the API budget.
+limit is provided in local mode. Each processor has a local token bucket, configured
+with `rate_limit.requests_per_second` (default 10) and `rate_limit.burst` (default 1).
+Size the aggregate request rate and worker count for the API budget. Redis mode
+uses its namespace-wide admission limit instead of this local bucket.
 
 ## Optional Redis coordination
 

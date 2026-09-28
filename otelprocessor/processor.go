@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
 	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 type metricsProcessor struct {
@@ -34,6 +35,7 @@ type metricsProcessor struct {
 	wg          sync.WaitGroup
 	now         func() time.Time
 	telemetry   processorTelemetry
+	limiter     *rate.Limiter
 }
 
 type processorTelemetry struct {
@@ -89,6 +91,7 @@ func newProcessor(set processor.Settings, cfg *Config, next consumer.Metrics) (*
 	c := &metricsProcessor{cfg: cfg, next: next, client: client, logger: set.Logger, scores: newScoreCache(cfg.CacheSize), queued: map[string]bool{}, jobs: make(chan scoreJob, cfg.QueueSize), now: time.Now, telemetry: newProcessorTelemetry(set.MeterProvider)}
 	// Independent replicas also need distinct writers for generated assessments.
 	c.replicaID = rand.Text()
+	c.limiter = rate.NewLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.Burst)
 	if cfg.Coordination.RedisURL != "" {
 		c.coordinator, err = newCoordinator(cfg)
 		if err != nil {
@@ -278,6 +281,19 @@ func (c *metricsProcessor) worker(ctx context.Context) {
 			return
 
 		case job := <-c.jobs:
+			// Only background workers wait. One limiter is shared by all local
+			// workers; Redis mode already admits owners under a shared budget.
+			if c.coordinator == nil {
+				if err := c.limiter.Wait(ctx); err != nil {
+					c.mu.Lock()
+					delete(c.queued, job.Key)
+					c.mu.Unlock()
+					return
+				}
+			}
+			if ctx.Err() != nil {
+				return
+			}
 			// Drop pending work during an outage cooldown; future batches retry.
 			c.mu.Lock()
 			cooling := c.now().Before(c.retryUntil)
