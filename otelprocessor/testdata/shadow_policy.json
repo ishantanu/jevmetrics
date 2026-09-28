@@ -1,0 +1,8 @@
+[
+  {"name":"protected", "protected":true, "cached":true, "score":0, "decision":"keep", "reason":"protected"},
+  {"name":"cold", "decision":"keep", "reason":"awaiting_assessment"},
+  {"name":"expired", "cached":true, "expired":true, "score":0, "decision":"keep", "reason":"awaiting_assessment"},
+  {"name":"keep boundary", "cached":true, "score":0.7, "decision":"keep", "reason":"cached_score"},
+  {"name":"drop boundary", "cached":true, "score":0.3, "decision":"drop", "reason":"cached_score"},
+  {"name":"uncertain", "cached":true, "score":0.5, "decision":"keep", "reason":"uncertain"}
+]

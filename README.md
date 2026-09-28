@@ -154,6 +154,15 @@ Companion datapoints carry `metric.name`, `jev.model`, and a per-processor-insta
 
 For a local Prometheus endpoint on port `9464`, use [config-local.yaml](examples/otelcol/config-local.yaml).
 
+Annotation also reports **what the retention policy would keep or drop** through
+Collector internal counters `jevmetrics.policy.instruments` and
+`jevmetrics.policy.datapoints`, with bounded `mode`, `decision`, and `reason`
+labels. `jevmetrics.inference.requests` counts inference attempts separately from
+cache lookups. These counters exclude generated companion metrics. See the
+[shadow evaluation guide](docs/SHADOW.md) for reasons, interpreting observed
+datapoint reduction, and inspecting individual decisions. Original input remains
+preserved in annotation mode.
+
 ## Configuration and policy
 
 The processor belongs in a metrics pipeline, typically after `memory_limiter` and before `batch`: `processors: [memory_limiter, jevmetrics/annotate, batch]`. Complete working configurations are in [examples/otelcol](examples/otelcol).

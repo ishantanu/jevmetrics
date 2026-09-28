@@ -146,15 +146,46 @@ func protectedMetric(name string, p Policy) bool {
 	return false
 }
 
-func shouldKeep(score metricScore, p Policy) bool {
+type retentionDecision struct {
+	keep   bool
+	reason string
+}
+
+// Both annotation previews and filtering use this policy, in the same order.
+func decideRetention(protected, validIdentity bool, score *metricScore, p Policy) retentionDecision {
+	if protected {
+		return retentionDecision{true, "protected"}
+	}
+	if !validIdentity {
+		return retentionDecision{true, "invalid_identity"}
+	}
+	if score == nil {
+		return retentionDecision{true, "awaiting_assessment"}
+	}
 	if score.Keep >= p.KeepThreshold {
-		return true
+		return retentionDecision{true, "cached_score"}
 	}
 	if score.Keep <= p.DropThreshold {
-		return false
+		return retentionDecision{false, "cached_score"}
 	}
-	// Uncertain zone is fail-open.
-	return true
+	return retentionDecision{true, "uncertain"}
+}
+
+func metricDatapoints(m pmetric.Metric) int {
+	switch m.Type() {
+	case pmetric.MetricTypeGauge:
+		return m.Gauge().DataPoints().Len()
+	case pmetric.MetricTypeSum:
+		return m.Sum().DataPoints().Len()
+	case pmetric.MetricTypeHistogram:
+		return m.Histogram().DataPoints().Len()
+	case pmetric.MetricTypeExponentialHistogram:
+		return m.ExponentialHistogram().DataPoints().Len()
+	case pmetric.MetricTypeSummary:
+		return m.Summary().DataPoints().Len()
+	default:
+		return 0
+	}
 }
 
 func copyAllowedContext(resource pcommon.Map, allowed []string) map[string]string {

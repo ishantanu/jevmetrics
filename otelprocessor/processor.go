@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
 	"go.uber.org/zap"
@@ -39,17 +40,20 @@ type metricsProcessor struct {
 }
 
 type processorTelemetry struct {
-	cacheHits     metric.Int64Counter
-	cacheMisses   metric.Int64Counter
-	queued        metric.Int64Counter
-	queueRejected metric.Int64Counter
-	scored        metric.Int64Counter
-	scoreFailures metric.Int64Counter
-	processed     metric.Int64Counter
-	kept          metric.Int64Counter
-	dropped       metric.Int64Counter
-	annotated     metric.Int64Counter
-	scoreLatency  metric.Float64Histogram
+	policyInstruments metric.Int64Counter
+	policyDatapoints  metric.Int64Counter
+	requests          metric.Int64Counter
+	cacheHits         metric.Int64Counter
+	cacheMisses       metric.Int64Counter
+	queued            metric.Int64Counter
+	queueRejected     metric.Int64Counter
+	scored            metric.Int64Counter
+	scoreFailures     metric.Int64Counter
+	processed         metric.Int64Counter
+	kept              metric.Int64Counter
+	dropped           metric.Int64Counter
+	annotated         metric.Int64Counter
+	scoreLatency      metric.Float64Histogram
 }
 
 func newProcessorTelemetry(provider metric.MeterProvider) processorTelemetry {
@@ -63,17 +67,20 @@ func newProcessorTelemetry(provider metric.MeterProvider) processorTelemetry {
 	}
 	latency, _ := meter.Float64Histogram("jevmetrics.score.duration", metric.WithUnit("s"), metric.WithDescription("Time spent obtaining a Jev metric assessment."))
 	return processorTelemetry{
-		cacheHits:     newCounter("jevmetrics.cache.hits", "Metrics served by the local assessment cache."),
-		cacheMisses:   newCounter("jevmetrics.cache.misses", "Metrics without a fresh local assessment."),
-		queued:        newCounter("jevmetrics.queue.enqueued", "Assessment jobs accepted by the background queue."),
-		queueRejected: newCounter("jevmetrics.queue.rejected", "Assessment jobs rejected because the queue was full or cooling down."),
-		scored:        newCounter("jevmetrics.score.success", "Successful Jev metric assessments."),
-		scoreFailures: newCounter("jevmetrics.score.failure", "Failed Jev metric assessments."),
-		processed:     newCounter("jevmetrics.metrics.processed", "Input metrics inspected by the processor."),
-		kept:          newCounter("jevmetrics.metrics.kept", "Input metrics retained by the processor, including annotation and fail-open decisions."),
-		dropped:       newCounter("jevmetrics.metrics.dropped", "Input metrics removed by reduce policy."),
-		annotated:     newCounter("jevmetrics.metrics.annotated", "Input metrics with cached assessments emitted in annotate mode."),
-		scoreLatency:  latency,
+		policyInstruments: newCounter("jevmetrics.policy.instruments", "Input instrument occurrences evaluated by retention policy, including shadow decisions."),
+		policyDatapoints:  newCounter("jevmetrics.policy.datapoints", "Observed input datapoints evaluated by retention policy, including shadow decisions."),
+		requests:          newCounter("jevmetrics.inference.requests", "Jev inference attempts started, excluding cache lookups and admission waits."),
+		cacheHits:         newCounter("jevmetrics.cache.hits", "Metrics served by the local assessment cache."),
+		cacheMisses:       newCounter("jevmetrics.cache.misses", "Metrics without a fresh local assessment."),
+		queued:            newCounter("jevmetrics.queue.enqueued", "Assessment jobs accepted by the background queue."),
+		queueRejected:     newCounter("jevmetrics.queue.rejected", "Assessment jobs rejected because the queue was full or cooling down."),
+		scored:            newCounter("jevmetrics.score.success", "Successful Jev metric assessments."),
+		scoreFailures:     newCounter("jevmetrics.score.failure", "Failed Jev metric assessments."),
+		processed:         newCounter("jevmetrics.metrics.processed", "Input metrics inspected by the processor."),
+		kept:              newCounter("jevmetrics.metrics.kept", "Input metrics retained by the processor, including annotation and fail-open decisions."),
+		dropped:           newCounter("jevmetrics.metrics.dropped", "Input metrics removed by reduce policy."),
+		annotated:         newCounter("jevmetrics.metrics.annotated", "Input metrics with cached assessments emitted in annotate mode."),
+		scoreLatency:      latency,
 	}
 }
 
@@ -171,47 +178,45 @@ func (c *metricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 			}, 0)
 			ms.RemoveIf(func(m pmetric.Metric) bool {
 				c.telemetry.processed.Add(ctx, 1)
-				if protectedMetric(m.Name(), c.cfg.Policy) {
-					c.telemetry.kept.Add(ctx, 1)
-					return false
+				protected := protectedMetric(m.Name(), c.cfg.Policy)
+				key := ""
+				var score *metricScore
+				if !protected {
+					key = scoreKey(rm.Resource().Attributes(), sm.Scope(), m, rm.SchemaUrl(), sm.SchemaUrl())
+					if key != "" {
+						cached, ok := c.cachedScore(key, now)
+						if ok {
+							c.telemetry.cacheHits.Add(ctx, 1)
+							score = &cached
+						} else {
+							c.telemetry.cacheMisses.Add(ctx, 1)
+							c.enqueue(key, summarizeMetric(m, sm.Scope(), rm.Resource().Attributes(), c.cfg.ContextAttributes))
+						}
+					}
 				}
-				key := scoreKey(rm.Resource().Attributes(), sm.Scope(), m, rm.SchemaUrl(), sm.SchemaUrl())
-				if key == "" {
-					c.telemetry.kept.Add(ctx, 1)
-					return false
+				decision := decideRetention(protected, key != "", score, c.cfg.Policy)
+				action := "keep"
+				if !decision.keep {
+					action = "drop"
 				}
-				score, ok := c.cachedScore(key, now)
-				if !ok {
-					c.telemetry.cacheMisses.Add(ctx, 1)
-					c.enqueue(
-						key,
-						summarizeMetric(
-							m,
-							sm.Scope(),
-							rm.Resource().Attributes(),
-							c.cfg.ContextAttributes,
-						),
-					)
-					c.telemetry.kept.Add(ctx, 1)
-					return false
-				}
-				c.telemetry.cacheHits.Add(ctx, 1)
-				scoresToEmit = append(scoresToEmit, struct {
-					name  string
-					score metricScore
-				}{m.Name(), score})
-				if c.cfg.Mode == "annotate" {
+				attrs := metric.WithAttributes(attribute.String("mode", c.cfg.Mode), attribute.String("decision", action), attribute.String("reason", decision.reason))
+				c.telemetry.policyInstruments.Add(ctx, 1, attrs)
+				c.telemetry.policyDatapoints.Add(ctx, int64(metricDatapoints(m)), attrs)
+				c.logger.Debug("metric retention decision", zap.String("metric", m.Name()), zap.String("mode", c.cfg.Mode), zap.String("decision", action), zap.String("reason", decision.reason))
+				if c.cfg.Mode == "annotate" && score != nil {
+					scoresToEmit = append(scoresToEmit, struct {
+						name  string
+						score metricScore
+					}{m.Name(), *score})
 					c.telemetry.annotated.Add(ctx, 1)
-					c.telemetry.kept.Add(ctx, 1)
-					return false
 				}
-				keep := shouldKeep(score, c.cfg.Policy)
-				if keep {
-					c.telemetry.kept.Add(ctx, 1)
-				} else {
+				drop := c.cfg.Mode == "reduce" && !decision.keep
+				if drop {
 					c.telemetry.dropped.Add(ctx, 1)
+				} else {
+					c.telemetry.kept.Add(ctx, 1)
 				}
-				return !keep
+				return drop
 			})
 			if c.cfg.Mode == "annotate" {
 				appendScoreMetrics(sm.Metrics(), scoresToEmit, now, c.cfg.Model, c.replicaID)
@@ -312,10 +317,14 @@ func (c *metricsProcessor) worker(ctx context.Context) {
 			var s metricScore
 			var err error
 			started := time.Now()
+			infer := func(ctx context.Context, summary metricSummary) (metricScore, error) {
+				c.telemetry.requests.Add(ctx, 1)
+				return c.client.scoreMetric(ctx, summary)
+			}
 			if c.coordinator != nil {
-				s, err = c.coordinator.score(ctx, job, c.client.scoreMetric)
+				s, err = c.coordinator.score(ctx, job, infer)
 			} else {
-				s, err = c.client.scoreMetric(ctx, job.Summary)
+				s, err = infer(ctx, job.Summary)
 			}
 
 			c.mu.Lock()

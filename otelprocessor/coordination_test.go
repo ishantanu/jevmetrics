@@ -163,6 +163,7 @@ func runSharedReplicas(t *testing.T, address string) {
 	cfg := sharedConfig(address)
 	cfg.Mode = "reduce"
 	var calls atomic.Int32
+	var attempts recordingCounter
 	entered := make(chan struct{}, 1)
 	release := make(chan struct{})
 	transport := transportFunc(func(r *http.Request) (*http.Response, error) {
@@ -192,6 +193,7 @@ func runSharedReplicas(t *testing.T, address string) {
 	makeReplica := func() (*metricsProcessor, chan pmetric.Metrics) {
 		output := make(chan pmetric.Metrics, 16)
 		c := testProcessor(t, cfg, func(_ context.Context, md pmetric.Metrics) error { output <- md; return nil })
+		c.telemetry.requests = &attempts
 		// An exhausted local bucket must not delay Redis lookups or ownership:
 		// coordinated mode uses the namespace-wide limiter instead.
 		c.limiter.SetLimit(0)
@@ -254,6 +256,9 @@ func runSharedReplicas(t *testing.T, address string) {
 	awaitCondition(t, func() bool { _, ok := d.cachedScore(key, time.Now()); return ok })
 	if calls.Load() != 1 {
 		t.Fatal("replacement replica repeated inference")
+	}
+	if attempts.value.Load() != 1 {
+		t.Fatal("inference counter included shared cache lookups")
 	}
 }
 
