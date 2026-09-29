@@ -3,7 +3,7 @@ module github.com/ishantanu/jevmetrics/otelprocessor
 go 1.26.0
 
 require (
-	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/redis/go-redis/v9 v9.22.0
 	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/config/configopaque v1.67.0
