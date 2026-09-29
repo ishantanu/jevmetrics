@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 2s
+  # Keep the dashboard's metric names stable across UTF-8 negotiation.
+  metric_name_validation_scheme: legacy
+scrape_configs:
+  - job_name: collector-internal
+    static_configs:
+      - targets: [collector:8888]
+  - job_name: demo-metrics
+    static_configs:
+      - targets: [collector:9464]

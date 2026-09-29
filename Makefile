@@ -50,3 +50,17 @@ collector-version:
 
 clean:
 	rm -rf _build
+
+.PHONY: demo-up demo-check demo-down demo-live
+
+demo-up:
+	docker compose -f examples/demo/compose.yaml up -d --build
+
+demo-check:
+	docker compose -f examples/demo/compose.yaml --profile tools run --rm verify
+
+demo-down:
+	docker compose -f examples/demo/compose.yaml down --volumes --remove-orphans
+
+demo-live:
+	docker compose -f examples/demo/compose.yaml -f examples/demo/compose.live.yaml up -d --build

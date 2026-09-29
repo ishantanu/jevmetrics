@@ -1,0 +1,62 @@
+name: jevmetrics-demo
+services:
+  collector:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: jevmetrics-collector:demo
+    command: ["--config", "/etc/otelcol/demo.yaml"]
+    environment:
+      JEV_API_KEY: demo-not-a-real-key
+      JEV_BASE_URL: http://mock:8080
+      JEV_MODEL: demo-mock
+    volumes:
+      - ./collector.yaml:/etc/otelcol/demo.yaml:ro
+    depends_on:
+      mock:
+        condition: service_healthy
+  mock:
+    image: python:3.13.7-alpine
+    command: ["python", "-u", "/demo/demo.py", "mock"]
+    volumes:
+      - ./demo.py:/demo/demo.py:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+  generator:
+    image: python:3.13.7-alpine
+    command: ["python", "-u", "/demo/demo.py", "generate"]
+    volumes:
+      - ./demo.py:/demo/demo.py:ro
+    depends_on: [collector]
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=2h"]
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+    ports: ["127.0.0.1:${DEMO_PROMETHEUS_PORT:-9090}:9090"]
+    depends_on: [collector]
+  grafana:
+    image: grafana/grafana:12.1.1
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/jevmetrics.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:${DEMO_GRAFANA_PORT:-3000}:3000"]
+    depends_on: [prometheus]
+  verify:
+    profiles: [tools]
+    image: python:3.13.7-alpine
+    command: ["python", "-u", "/demo/demo.py", "verify"]
+    volumes:
+      - ./demo.py:/demo/demo.py:ro
+      - ./grafana/dashboards:/demo/dashboards:ro

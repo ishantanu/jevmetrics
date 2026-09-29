@@ -1,0 +1,7 @@
+# Explicit opt-in: sends synthetic demo metadata to Jev and incurs API usage.
+services:
+  collector:
+    environment:
+      JEV_BASE_URL: https://api.typesafe.ai
+      JEV_MODEL: jev-latest
+      JEV_API_KEY: ${JEV_API_KEY:?Set JEV_API_KEY to opt into live inference}

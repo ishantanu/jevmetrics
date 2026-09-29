@@ -70,3 +70,22 @@ jobs:
           ./_build/otelcol-jevmetrics components
       - name: Validate all example configurations without live inference
         run: make collector-validate
+
+  demo:
+    name: Mock demo end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Build and start the mock demo
+        run: make demo-up
+      - name: Verify telemetry and every dashboard query
+        run: make demo-check
+      - name: Print demo logs on failure
+        if: failure()
+        run: docker compose -f examples/demo/compose.yaml logs --tail 100
+      - name: Stop demo
+        if: always()
+        run: make demo-down

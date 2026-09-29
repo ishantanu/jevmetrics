@@ -70,6 +70,16 @@ A `noul` expresses the probability of a yes/no judgment. The recommended action 
 
 Inference happens remotely in Jev. The Collector handles metadata extraction, scheduling, caching, and policy execution locally. No model training takes place in the processor.
 
+## Try the local demo
+
+With Docker and Compose installed, run `make demo-up`, then open
+[Grafana](http://localhost:3000/d/jevmetrics-demo). The demo sends synthetic OTLP
+metrics through the actual Collector in annotation mode and uses mock inference
+by default—no API key required. It includes a dashboard and an end-to-end check:
+`make demo-check`. Stop and remove demo containers with `make demo-down`.
+See [demo instructions](examples/demo/README.md) for the explicit live-Jev option,
+port overrides, and what the synthetic results do and do not establish.
+
 ## Quickstart
 
 Requirements:
@@ -329,7 +339,7 @@ The processor is implemented in [otelprocessor](otelprocessor). The [OCB manifes
 
 Tests cover response validation, mode normalization, retention policy, payload preservation across metric types, queue saturation, cache identity/expiry/eviction, and failure recovery. They use a mock HTTP transport; live Jev inference and production assessment quality require separate validation. See [BUILD_NOTES.md](BUILD_NOTES.md) for recorded verification.
 
-This repository also contains an earlier standalone Prometheus polling experiment in [cmd/jevmetrics](cmd/jevmetrics). It assesses service anomalies and impact using a separate evaluator. The root `Dockerfile`, `make build`, and `make run` target that application; they do not build or run the OTel processor. The Collector path described above is the primary project direction.
+This repository also contains an earlier standalone Prometheus polling experiment in [cmd/jevmetrics](cmd/jevmetrics). It assesses service anomalies and impact using a separate evaluator. `Dockerfile.standalone`, `make build`, and `make run` target that application. The root `Dockerfile` builds the OTel Collector. The Collector path described above is the primary project direction.
 
 ## Contributing and CI
 
@@ -337,7 +347,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks and pull request
 guidance, and [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 [GitHub Actions](.github/workflows/ci.yml) runs formatting, vet, and race tests for
-both modules, then builds the Collector and validates all example configurations.
+both modules, builds the Collector, validates example configurations, and runs
+the Docker demo end to end, including every Grafana dashboard query.
 CI uses mock inference responses and a placeholder key; no Jev credentials are
 required. Run `make check` locally and `make collector-validate` after a Collector
 build. Dependabot checks GitHub Actions and processor dependencies weekly.
