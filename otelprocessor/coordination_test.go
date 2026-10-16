@@ -331,13 +331,14 @@ func TestSharedBudgetsAndFailureCooldown(t *testing.T) {
 func TestSharedVersionAndNamespaceIsolation(t *testing.T) {
 	server := miniredis.RunT(t)
 	cfg := sharedConfig(server.Addr())
+	cfg.Model = "jev-1.13.0"
 	a := testCoordinator(t, cfg)
 	expectState(t, a, "metric", "a", "owner")
 	if ok, err := a.finish(context.Background(), "metric", "a", "success", sharedPayload(t, a, 0)); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	for _, change := range []func(*Config){
-		func(c *Config) { c.Model = "different-model" },
+		func(c *Config) { c.Model = "jev-1.14.0" },
 		func(c *Config) { c.Coordination.Revision = "2" },
 		func(c *Config) { c.Policy.DropThreshold = 0.2 },
 		func(c *Config) { c.ContextAttributes = []string{"service.name"} },

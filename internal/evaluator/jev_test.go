@@ -21,7 +21,7 @@ func TestJevEvaluator(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"model":"typesafe/jev-test",
+			"model":"jev-1.14.0",
 			"answers":{
 				"anomaly":{"type":"noul","noul":0.91},
 				"user_impact":{"type":"noul","noul":0.74},
@@ -33,7 +33,7 @@ func TestJevEvaluator(t *testing.T) {
 	}))
 	defer server.Close()
 
-	j, err := NewJev(JevConfig{APIKey: "test-key", BaseURL: server.URL, Model: "jev-latest", Timeout: time.Second})
+	j, err := NewJev(JevConfig{APIKey: "test-key", BaseURL: server.URL, Model: "jev-1.14.0", Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestJevEvaluator(t *testing.T) {
 	if res.FailureDomain != "latency" {
 		t.Fatalf("unexpected failure domain: %q", res.FailureDomain)
 	}
-	if got.Model != "jev-latest" || len(got.Questions) != 4 {
+	if got.Model != "jev-1.14.0" || len(got.Questions) != 4 {
 		t.Fatalf("unexpected request: %+v", got)
 	}
 }

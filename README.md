@@ -70,6 +70,28 @@ A `noul` expresses the probability of a yes/no judgment. The recommended action 
 
 Inference happens remotely in Jev. The Collector handles metadata extraction, scheduling, caching, and policy execution locally. No model training takes place in the processor.
 
+## Jev 1.14
+
+Select Jev 1.14 with `model: jev-1.14.0` in the `jevmetrics` processor
+configuration. The Collector example and live demo use this pinned version.
+It uses the same `/v1/systemone` API and Noul/Choice question format already
+supported by this processor; no SDK upgrade is required.
+
+The processor default remains `jev-latest` for existing configurations. As of
+October 16, 2026, TypeSafe lists `jev-latest` as `jev-1.13.0` and `jev-preview`
+as `jev-1.14.0`; see [available models](https://docs.typesafe.ai/models).
+Use the versioned ID to avoid an alias changing underneath a tuned policy.
+Start a model upgrade in `annotate` mode and evaluate its decisions on your
+metrics before enabling reduction. Changing the configured model isolates
+Redis assessments automatically. If you keep an alias while its target changes,
+bump `coordination.revision` and restart Collectors to invalidate cached scores.
+The `jev.model` companion label identifies the configured model, not a resolved
+server version when an alias is used.
+
+The legacy standalone application also accepts `evaluator.model: "jev-1.14.0"`
+in its JSON configuration. Compatibility tests use mocked API responses; they
+do not measure Jev 1.14's decision quality.
+
 ## Try the local demo
 
 With Docker and Compose installed, run `make demo-up`, then open
@@ -183,7 +205,7 @@ processors:
     api_key: ${env:JEV_API_KEY}
     mode: annotate
     base_url: https://api.typesafe.ai
-    model: jev-latest
+    model: jev-1.14.0
     timeout: 3s
     queue_size: 256
     workers: 2

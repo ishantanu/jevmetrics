@@ -69,7 +69,8 @@ make demo-live
 ```
 
 The override refuses to start without a key, selects `https://api.typesafe.ai`
-and `jev-latest`, and sends only the synthetic demo metadata to the real API.
+and `jev-1.14.0` by default, and sends only the synthetic demo metadata to the real API.
+Override the model with `JEV_MODEL=jev-latest make demo-live` if needed.
 This consumes API usage. No live requests are made by the normal demo or CI.
 The mock container may still run but is no longer used by the Collector. Actual
 Jev scores and prospective reduction will vary; inspect the model labels on the

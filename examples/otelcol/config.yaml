@@ -22,7 +22,8 @@ processors:
     api_key: ${env:JEV_API_KEY}
     mode: annotate
     base_url: https://api.typesafe.ai
-    model: jev-latest
+    # Pin Jev 1.14; use jev-latest to follow the stable alias instead.
+    model: jev-1.14.0
     timeout: 3s
     queue_size: 256
     workers: 2
